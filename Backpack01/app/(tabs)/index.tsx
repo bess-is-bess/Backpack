@@ -61,8 +61,10 @@ export default function App() {
       .eq('id', item.id);
 
     if (!error) {
+      // 购买成功后直接刷新界面，移除 Alert 弹窗，实现无缝静默体验
       fetchData(); 
-      Alert.alert('🎉 购买成功', `${item.name} 已放入收纳盒，数量 +${item.to_buy}`);
+    } else {
+      Alert.alert('更新失败', error.message); // 只有报错时才弹窗提示
     }
   };
 

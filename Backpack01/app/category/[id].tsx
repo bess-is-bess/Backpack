@@ -9,7 +9,6 @@ export default function CategoryDetail() {
   
   const [items, setItems] = useState<any[]>([]);
   const [newItemName, setNewItemName] = useState('');
-  const [toBuyQuantity, setToBuyQuantity] = useState('1'); 
 
   useEffect(() => {
     fetchCategoryItems();
@@ -25,7 +24,7 @@ export default function CategoryDetail() {
     if (data) setItems(data);
   };
 
-  // 1. 添加全新物品
+  // 1. 添加全新物品 (现在只负责登记物品，不再自动加待买)
   const handleAddItem = async () => {
     if (!newItemName.trim()) return; 
 
@@ -36,13 +35,12 @@ export default function CategoryDetail() {
           category_id: id, 
           name: newItemName, 
           quantity: 0, 
-          to_buy: parseInt(toBuyQuantity) || 1 // 直接记入待买数量
+          to_buy: 0 // 默认待买数量为 0
         }
       ]);
 
     if (!error) {
       setNewItemName(''); 
-      setToBuyQuantity('1'); 
       fetchCategoryItems(); 
     }
   };
@@ -87,11 +85,13 @@ export default function CategoryDetail() {
         renderItem={renderItem}
         keyExtractor={(item: any) => item.id.toString()}
         contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={<Text style={styles.emptyText}>这里空空的，快来添加物品吧！🌱</Text>}
       />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inputSection}>
-        <Text style={styles.inputLabel}>✨ 记录需要买的新物品</Text>
+        <Text style={styles.inputLabel}>✨ 登记新物品</Text>
         <View style={styles.inputRow}>
+          {/* 现在只保留了一个物品名称的输入框 */}
           <TextInput
             style={styles.nameInput}
             placeholder="物品名称 (如: 可乐)"
@@ -99,24 +99,16 @@ export default function CategoryDetail() {
             onChangeText={setNewItemName}
             placeholderTextColor="#A1887F"
           />
-          <TextInput
-            style={styles.qtyInput}
-            placeholder="买几个"
-            value={toBuyQuantity}
-            onChangeText={setToBuyQuantity}
-            keyboardType="numeric"
-            placeholderTextColor="#A1887F"
-          />
         </View>
         <TouchableOpacity style={styles.addBtn} onPress={handleAddItem}>
-          <Text style={styles.addBtnText}>加入清单并列入待买</Text>
+          <Text style={styles.addBtnText}>加入收纳</Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-// 样式部分
+// 样式部分 (微调了输入框的布局以适应单输入框)
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FDF6E3' },
   header: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 2, borderBottomColor: '#EFEBE0' },
@@ -124,6 +116,7 @@ const styles = StyleSheet.create({
   backBtnText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 16 },
   title: { fontSize: 22, fontWeight: 'bold', color: '#5D4037' },
   listContainer: { padding: 20 },
+  emptyText: { textAlign: 'center', color: '#A1887F', marginTop: 40, fontSize: 16 },
   itemCard: { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, marginBottom: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#78C8A0', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#EFEBE0' },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 18, fontWeight: 'bold', color: '#8D6E63', marginBottom: 4 },
@@ -133,8 +126,7 @@ const styles = StyleSheet.create({
   inputSection: { padding: 25, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EFEBE0', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
   inputLabel: { fontSize: 16, fontWeight: 'bold', color: '#78C8A0', marginBottom: 15 },
   inputRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-  nameInput: { flex: 0.7, backgroundColor: '#FDF6E3', borderRadius: 16, padding: 18, color: '#5D4037', fontWeight: '600', fontSize: 16 },
-  qtyInput: { flex: 0.25, backgroundColor: '#FDF6E3', borderRadius: 16, padding: 18, textAlign: 'center', color: '#5D4037', fontWeight: 'bold', fontSize: 16 },
+  nameInput: { flex: 1, backgroundColor: '#FDF6E3', borderRadius: 16, padding: 18, color: '#5D4037', fontWeight: '600', fontSize: 16 },
   addBtn: { backgroundColor: '#78C8A0', padding: 18, borderRadius: 16, alignItems: 'center' },
   addBtnText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' }
 });

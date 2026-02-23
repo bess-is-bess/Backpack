@@ -7,10 +7,12 @@ export default function CategoriesScreen() {
   const [categories, setCategories] = useState<any[]>([]);
   const router = useRouter();
 
-  // 控制新建分类弹窗的状态
   const [isModalVisible, setModalVisible] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('');
+
+  // 👈 新增：管理页面是否处于“整理模式”
+  const [isEditing, setIsEditing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -25,7 +27,8 @@ export default function CategoriesScreen() {
       .order('created_at', { ascending: true });
     
     if (catError) {
-      Alert.alert('❌ 数据库拦截', '无法读取分类: ' + catError.message);
+      if (Platform.OS === 'web') window.alert('❌ 无法读取分类: ' + catError.message);
+      else Alert.alert('❌ 数据库拦截', '无法读取分类: ' + catError.message);
     } else if (categoryData) {
       setCategories(categoryData);
     }
@@ -39,7 +42,7 @@ export default function CategoriesScreen() {
       .insert([
         {
           name: newCategoryName,
-          icon: newCategoryIcon.trim() || '📦', // 如果没填，给个默认纸箱
+          icon: newCategoryIcon.trim() || '📦', 
           is_default: false
         }
       ]);
@@ -47,60 +50,101 @@ export default function CategoriesScreen() {
     if (!error) {
       setNewCategoryName('');
       setNewCategoryIcon('');
-      setModalVisible(false); // 成功后关闭弹窗
+      setModalVisible(false); 
       fetchData(); 
     } else {
-      Alert.alert('添加失败', error.message);
+      if (Platform.OS === 'web') window.alert('添加失败: ' + error.message);
+      else Alert.alert('添加失败', error.message);
     }
   };
 
-  const handleDeleteCategory = (item: any) => {
-    Alert.alert(
-      '🗑️ 丢弃收纳盒',
-      `确定要扔掉 "${item.name}" 吗？里面的物品也会被一起清理掉哦！`,
-      [
-        { text: '保留', style: 'cancel' },
-        { 
-          text: '扔掉', 
-          style: 'destructive', 
-          onPress: async () => {
-            const { error } = await supabase.from('categories').delete().eq('id', item.id);
-            if (!error) fetchData();
-            else Alert.alert('删除失败', error.message);
-          } 
-        }
-      ]
-    );
+  // 抽出删除数据库的独立函数
+  const deleteCategoryFromDB = async (id: string) => {
+    const { error } = await supabase.from('categories').delete().eq('id', id);
+    if (!error) fetchData();
+    else {
+      if (Platform.OS === 'web') window.alert('删除失败: ' + error.message);
+      else Alert.alert('删除失败', error.message);
+    }
   };
 
-  const renderCategory = ({ item }: { item: any }) => (
+  // 👈 智能分发：Web 端用浏览器自带弹窗，手机端用原生 Alert
+  const handleDeleteCategory = (item: any) => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(`🗑️ 丢弃收纳盒\n\n确定要扔掉 "${item.name}" 吗？里面的物品也会被一起清理掉哦！`);
+      if (confirmed) {
+        deleteCategoryFromDB(item.id);
+      }
+    } else {
+      Alert.alert(
+        '🗑️ 丢弃收纳盒',
+        `确定要扔掉 "${item.name}" 吗？里面的物品也会被一起清理掉哦！`,
+        [
+          { text: '保留', style: 'cancel' },
+          { 
+            text: '扔掉', 
+            style: 'destructive', 
+            onPress: () => deleteCategoryFromDB(item.id) 
+          }
+        ]
+      );
+    }
+  };
+
+ const renderCategory = ({ item }: { item: any }) => (
     <TouchableOpacity 
       style={styles.card}
       onPress={() => {
-        router.push({
-          pathname: '/category/[id]' as any,
-          params: { id: item.id, name: item.name }
-        });
+        if (isEditing) {
+          handleDeleteCategory(item); 
+        } else {
+          router.push({
+            pathname: '/category/[id]' as any,
+            params: { id: item.id, name: item.name }
+          });
+        }
       }}
-      onLongPress={() => handleDeleteCategory(item)}
+      onLongPress={() => {
+        if (!isEditing) handleDeleteCategory(item);
+      }}
       activeOpacity={0.7}
     >
+      {/* 👈 小红点代码放在这里，它会乖乖待在卡片内部 */}
+      {isEditing && (
+        <View style={styles.deleteBadge}>
+          <Text style={styles.deleteBadgeText}>-</Text>
+        </View>
+      )}
+      
       <Text style={styles.cardIcon}>{item.icon || '📦'}</Text>
       <Text style={styles.cardTitle}>{item.name}</Text>
     </TouchableOpacity>
   );
+
 
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.headerTitle}>My Backpack 🏕️</Text>
       
       <View style={styles.section}>
-        {/* 👈 重点修改：带有 + 号的标题栏 */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>🗂️ 我的收纳 (长按可删除)</Text>
-          <TouchableOpacity style={styles.addIconBtn} onPress={() => setModalVisible(true)}>
-            <Text style={styles.addIconText}>+</Text>
-          </TouchableOpacity>
+          <Text style={styles.sectionTitle}>🗂️ 我的收纳</Text>
+          
+          {/* 👈 右侧操作区：加入了“整理”按钮 */}
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={[styles.editBtn, isEditing && styles.editBtnActive]} 
+              onPress={() => setIsEditing(!isEditing)}
+            >
+              <Text style={[styles.editBtnText, isEditing && styles.editBtnTextActive]}>
+                {isEditing ? '完成' : '整理'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.addIconBtn} onPress={() => setModalVisible(true)}>
+              <Text style={styles.addIconText}>+</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <FlatList
@@ -114,7 +158,6 @@ export default function CategoriesScreen() {
         />
       </View>
 
-      {/* 👈 重点修改：全新设计的滑动弹窗 Modal */}
       <Modal visible={isModalVisible} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
@@ -161,18 +204,57 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#8D6E63', marginTop: 20, marginBottom: 15, textAlign: 'center' },
   section: { flex: 1, paddingHorizontal: 20 },
   
-  // 👈 新增：标题栏排版样式
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, paddingHorizontal: 5 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#5D4037' },
-  addIconBtn: { backgroundColor: '#78C8A0', width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
+  
+  // 👈 新增按钮组排版
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  
+  // 👈 新增“整理”按钮的样式
+  editBtn: { backgroundColor: '#EFEBE0', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },
+  editBtnActive: { backgroundColor: '#EF5350' }, // 激活时变成亮眼提示色
+  editBtnText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 14 },
+  editBtnTextActive: { color: '#FFFFFF' },
+
+  addIconBtn: { backgroundColor: '#78C8A0', width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
   addIconText: { color: '#FFFFFF', fontSize: 24, fontWeight: 'bold', lineHeight: 26, textAlign: 'center' },
 
-  row: { justifyContent: 'space-between', marginBottom: 15 },
-  card: { backgroundColor: '#FFFFFF', width: '47%', padding: 25, borderRadius: 24, alignItems: 'center', shadowColor: '#78C8A0', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3, borderWidth: 2, borderColor: '#EFEBE0' },
+row: { justifyContent: 'space-between', marginBottom: 15 },
+  
+  // 👈 还原为一个干净的卡片样式
+  card: { 
+    backgroundColor: '#FFFFFF', 
+    width: '47%', 
+    padding: 25, 
+    borderRadius: 24, 
+    alignItems: 'center', 
+    shadowColor: '#78C8A0', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 8, 
+    elevation: 3, 
+    borderWidth: 2, 
+    borderColor: '#EFEBE0',
+    position: 'relative' // 确保内部的绝对定位生效
+  },
+  
   cardIcon: { fontSize: 36, marginBottom: 10 },
   cardTitle: { fontSize: 16, fontWeight: '600', color: '#8D6E63' },
   
-  // 👈 新增：弹窗专属样式
+  // 👈 核心修复：把 top 和 right 从 -8 改成 10 (正数)，把它拉回卡片内部！
+  deleteBadge: { 
+    position: 'absolute', 
+    top: 10,     // 距离顶部 10 像素
+    right: 10,   // 距离右边 10 像素
+    backgroundColor: '#EF5350', 
+    width: 28, 
+    height: 28, 
+    borderRadius: 14, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    zIndex: 10, 
+  },
+  deleteBadgeText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold', lineHeight: 20, textAlign: 'center' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FDF6E3', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 30, shadowColor: '#000', shadowOffset: { width: 0, height: -5 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5 },
   modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#5D4037', marginBottom: 20, textAlign: 'center' },

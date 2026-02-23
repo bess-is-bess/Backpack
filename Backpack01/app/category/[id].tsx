@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-// 👈 修复警告 1: 改用最新的安全区组件
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../supabase';
+
+// 获取屏幕宽度，用于计算大图显示尺寸
+const { width: screenWidth } = Dimensions.get('window');
 
 export default function CategoryDetail() {
   const { id, name } = useLocalSearchParams(); 
@@ -14,6 +16,7 @@ export default function CategoryDetail() {
   const [items, setItems] = useState<any[]>([]);
   const [newItemName, setNewItemName] = useState('');
 
+  // 编辑弹窗状态
   const [isModalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [editName, setEditName] = useState('');           
@@ -21,6 +24,9 @@ export default function CategoryDetail() {
   const [editPrice, setEditPrice] = useState('');
   const [editDescription, setEditDescription] = useState(''); 
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
+
+  // 👈 新增：控制图片放大预览（灯箱）的状态，存储当前要放大的图片URL
+  const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCategoryItems();
@@ -70,16 +76,19 @@ export default function CategoryDetail() {
     }
 
     let result = await ImagePicker.launchImageLibraryAsync({
-      // 👈 修复警告 2: 使用最新的数组格式 API
       mediaTypes: ['images'], 
-      // 👈 核心修复: 必须关闭编辑功能！否则 iOS 会把透明 PNG 强制转成不透明的 JPEG
-      allowsEditing: false,  
-      quality: 0.5,   
+      // 👈 核心改动：恢复允许编辑，并强制 1:1 正方形裁剪
+      allowsEditing: true,  
+      aspect: [1, 1],
+      // 不设置 quality，让系统自动处理，尽量保留原图质量
       base64: true,   
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      const mimeType = result.assets[0].mimeType || 'image/png';
+      // 注意：开启 editing 后，iOS 可能会强制转为 JPEG，导致透明底变黑/白。
+      // 这是为了统一正方形 UI 的妥协。如果用户选的是 iOS 抠好的透明图，
+      // 裁剪后依然是一个背景透明的正方形图片，视觉上没问题。
+      const mimeType = result.assets[0].mimeType || 'image/jpeg'; 
       const base64Image = `data:${mimeType};base64,${result.assets[0].base64}`;
       setEditImageUrl(base64Image); 
     }
@@ -127,10 +136,15 @@ export default function CategoryDetail() {
             </Text>
           </View>
 
+          {/* 👈 修改：将小图包裹在 TouchableOpacity 中，点击触发放大 */}
           {item.image_url ? (
-            <View style={styles.itemImageContainer}>
+            <TouchableOpacity 
+              style={styles.itemImageContainer}
+              onPress={() => setZoomedImageUrl(item.image_url)}
+              activeOpacity={0.8}
+            >
               <Image source={{ uri: item.image_url }} style={styles.itemImage} />
-            </View>
+            </TouchableOpacity>
           ) : null}
         </TouchableOpacity>
       </Swipeable>
@@ -157,7 +171,7 @@ export default function CategoryDetail() {
         />
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inputSection}>
-          <Text style={styles.inputLabel}>✨ 登记新物品 (长按可编辑/加图，左滑选项)</Text>
+          <Text style={styles.inputLabel}>✨ 登记新物品 (长按编辑，左滑选项，点击图片放大)</Text>
           <View style={styles.inputRow}>
             <TextInput style={styles.nameInput} placeholder="物品名称 (如: 可乐)" value={newItemName} onChangeText={setNewItemName} placeholderTextColor="#A1887F" />
           </View>
@@ -166,6 +180,7 @@ export default function CategoryDetail() {
           </TouchableOpacity>
         </KeyboardAvoidingView>
 
+        {/* 编辑物品弹窗 */}
         <Modal visible={isModalVisible} transparent={true} animationType="slide">
           <View style={styles.modalOverlay}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
@@ -176,7 +191,7 @@ export default function CategoryDetail() {
                   {editImageUrl ? (
                     <Image source={{ uri: editImageUrl }} style={styles.previewImage} />
                   ) : (
-                    <Text style={styles.imageUploadText}>📸 添加/更换照片</Text>
+                    <Text style={styles.imageUploadText}>📸 添加/更换照片(正方形)</Text>
                   )}
                 </TouchableOpacity>
                 {editImageUrl && (
@@ -186,6 +201,7 @@ export default function CategoryDetail() {
                 )}
               </View>
 
+              {/* ... 其他输入框 ... */}
               <Text style={styles.modalLabel}>物品名称</Text>
               <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} />
               <Text style={styles.modalLabel}>当前数量</Text>
@@ -206,6 +222,26 @@ export default function CategoryDetail() {
             </KeyboardAvoidingView>
           </View>
         </Modal>
+
+        {/* 👈 新增：图片放大预览弹窗 (灯箱) */}
+        <Modal visible={zoomedImageUrl !== null} transparent={true} animationType="fade">
+          <View style={styles.zoomModalOverlay}>
+            <TouchableOpacity 
+              style={styles.zoomModalContainer} 
+              activeOpacity={1} 
+              onPress={() => setZoomedImageUrl(null)} // 点击空白处或图片关闭弹窗
+            >
+              {zoomedImageUrl && (
+                <Image 
+                  source={{ uri: zoomedImageUrl }} 
+                  style={styles.zoomedImage} 
+                  resizeMode="contain" 
+                />
+              )}
+            </TouchableOpacity>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     </GestureHandlerRootView>
   );
@@ -229,17 +265,19 @@ const styles = StyleSheet.create({
   descText: { fontSize: 13, color: '#A1887F', fontStyle: 'italic', marginBottom: 8, lineHeight: 18 },
   quantityText: { color: '#78C8A0', fontSize: 13, fontWeight: 'bold', marginTop: 4 },
   
- // 👈 1. 物品卡片右侧的图片容器（纯净悬浮效果）
+  // 恢复了容器的尺寸限制，确保列表整齐
   itemImageContainer: { 
     width: 70, 
     height: 70, 
     justifyContent: 'center', 
     alignItems: 'center', 
     marginLeft: 10,
-    backgroundColor: 'transparent', // 强制透明底
-    // 删除了原本的黄色背景、边框和圆角，让它像个真正的贴纸
+    backgroundColor: 'transparent', 
+    borderRadius: 12, // 加一点圆角让点击反馈更好看
+    overflow: 'hidden',
   },
-  itemImage: { width: '100%', height: '100%', resizeMode: 'contain' },
+  // 使用 cover 模式填满正方形容器
+  itemImage: { width: '100%', height: '100%', resizeMode: 'cover' },
 
   swipeActionsContainer: { flexDirection: 'row' },
   swipeActionBtn: { justifyContent: 'center', alignItems: 'center', width: 75 },
@@ -252,27 +290,17 @@ const styles = StyleSheet.create({
   addBtn: { backgroundColor: '#78C8A0', padding: 18, borderRadius: 16, alignItems: 'center' },
   addBtnText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
   
+  // 编辑弹窗样式
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FDF6E3', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5, maxHeight: '90%' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#5D4037', marginBottom: 15, textAlign: 'center' },
   
   imageUploadSection: { alignItems: 'center', marginBottom: 15 },
-  // 👈 2. 弹窗里的照片上传区（改为干净的白色底）
-  imageUploadBtn: { 
-    width: 100, 
-    height: 100, 
-    borderRadius: 20, 
-    backgroundColor: '#FFFFFF', // 从灰色改成了干净的白色
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    overflow: 'hidden', 
-    borderWidth: 2, 
-    borderColor: '#D7CCC8', 
-    borderStyle: 'dashed' 
-  },
+  // 预览图容器也改成正方形
+  imageUploadBtn: { width: 120, height: 120, borderRadius: 20, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 2, borderColor: '#D7CCC8', borderStyle: 'dashed' },
   imageUploadText: { color: '#8D6E63', fontWeight: 'bold', textAlign: 'center', fontSize: 13, padding: 5 },
-  // 👈 弹窗里的预览图也用 contain，避免变形
-  previewImage: { width: '100%', height: '100%', resizeMode: 'contain' },
+  // 预览图使用 cover 填满
+  previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   removeImageBtn: { marginTop: 8 },
   removeImageText: { color: '#EF5350', fontSize: 13, fontWeight: 'bold' },
 
@@ -283,5 +311,10 @@ const styles = StyleSheet.create({
   modalCancelBtn: { flex: 1, backgroundColor: '#EFEBE0', padding: 15, borderRadius: 14, marginRight: 10, alignItems: 'center' },
   modalCancelText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 16 },
   modalSaveBtn: { flex: 1, backgroundColor: '#78C8A0', padding: 15, borderRadius: 14, marginLeft: 10, alignItems: 'center' },
-  modalSaveText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }
+  modalSaveText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
+
+  // 👈 新增：图片放大弹窗样式
+  zoomModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  zoomModalContainer: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
+  zoomedImage: { width: screenWidth, height: screenWidth, maxHeight: '80%' }, // 宽度占满屏幕，高度自适应
 });

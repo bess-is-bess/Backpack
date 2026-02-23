@@ -1,10 +1,9 @@
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Image, KeyboardAvoidingView, Modal, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { supabase } from '../../supabase';
-// 👈 引入图片选择器
-import * as ImagePicker from 'expo-image-picker';
 
 export default function CategoryDetail() {
   const { id, name } = useLocalSearchParams(); 
@@ -19,7 +18,7 @@ export default function CategoryDetail() {
   const [editQuantity, setEditQuantity] = useState('');
   const [editPrice, setEditPrice] = useState('');
   const [editDescription, setEditDescription] = useState(''); 
-  const [editImageUrl, setEditImageUrl] = useState<string | null>(null); // 👈 新增：图片状态
+  const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCategoryItems();
@@ -57,37 +56,31 @@ export default function CategoryDetail() {
     setEditQuantity(item.quantity?.toString() || '0');
     setEditPrice(item.price || '');             
     setEditDescription(item.description || ''); 
-    setEditImageUrl(item.image_url || null); // 👈 载入旧图片
+    setEditImageUrl(item.image_url || null); 
     setModalVisible(true);
   };
 
-  // 👈 新增：调用相册并处理图片
+  // 👈 核心升级：调用相册并动态识别图片格式
   const pickImage = async () => {
-    // 请求相册权限
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('需要权限', '抱歉，我们需要相册权限才能上传照片！');
       return;
     }
 
-    // 打开相册，允许用户裁剪，并且开启 base64 转换
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [1, 1], // 强制裁剪成正方形，视觉更统一
-      quality: 0.5,   // 压缩质量，防止 base64 字符串过长撑爆数据库
-      base64: true,   // 直接获取 Base64 数据
+      aspect: [1, 1], // 强制裁剪成正方形
+      quality: 0.5,   
+      base64: true,   
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      
-      // 🚨 高级拓展点：如果你以后想接抠图 API，就在这里把 base64Image 发给 remove.bg，
-      // 然后把拿回来的透明底图片存进 setEditImageUrl。
-      // const transparentImage = await callRemoveBgAPI(base64Image);
-      // setEditImageUrl(transparentImage);
-
-      setEditImageUrl(base64Image); // 当前 MVP 阶段先存原图裁剪版
+      // 动态读取图片的 mimeType，如果是苹果原生抠出来的透明图，它会是 image/png，这样背景就不会变黑！
+      const mimeType = result.assets[0].mimeType || 'image/png';
+      const base64Image = `data:${mimeType};base64,${result.assets[0].base64}`;
+      setEditImageUrl(base64Image); 
     }
   };
 
@@ -98,7 +91,7 @@ export default function CategoryDetail() {
       quantity: parseInt(editQuantity) || 0, 
       price: editPrice, 
       description: editDescription,
-      image_url: editImageUrl // 👈 保存图片数据到数据库
+      image_url: editImageUrl 
     }).eq('id', editingItem.id);
 
     if (!error) { setModalVisible(false); setEditingItem(null); fetchCategoryItems(); }
@@ -124,7 +117,6 @@ export default function CategoryDetail() {
           activeOpacity={0.7}
           onLongPress={() => openEditModal(item)}
         >
-          {/* 左侧：文字信息 */}
           <View style={styles.itemInfo}>
             <Text style={styles.itemName}>{item.name}</Text>
             {item.price ? <Text style={styles.metaText}>💰 价值: {item.price}</Text> : null}
@@ -134,13 +126,12 @@ export default function CategoryDetail() {
             </Text>
           </View>
 
-          {/* 👈 右侧：照片渲染区 (如果用户传了图就显示) */}
+          {/* 如果有照片，渲染在右侧 */}
           {item.image_url ? (
             <View style={styles.itemImageContainer}>
               <Image source={{ uri: item.image_url }} style={styles.itemImage} />
             </View>
           ) : null}
-
         </TouchableOpacity>
       </Swipeable>
     </View>
@@ -166,7 +157,7 @@ export default function CategoryDetail() {
         />
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inputSection}>
-          <Text style={styles.inputLabel}>✨ 登记新物品 (长按可编辑/加图，左滑更多选项)</Text>
+          <Text style={styles.inputLabel}>✨ 登记新物品 (长按可编辑/加图，左滑选项)</Text>
           <View style={styles.inputRow}>
             <TextInput style={styles.nameInput} placeholder="物品名称 (如: 可乐)" value={newItemName} onChangeText={setNewItemName} placeholderTextColor="#A1887F" />
           </View>
@@ -180,7 +171,6 @@ export default function CategoryDetail() {
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
               <Text style={styles.modalTitle}>✏️ 编辑物品信息</Text>
               
-              {/* 👈 新增：图片上传区块 */}
               <View style={styles.imageUploadSection}>
                 <TouchableOpacity style={styles.imageUploadBtn} onPress={pickImage}>
                   {editImageUrl ? (
@@ -221,7 +211,6 @@ export default function CategoryDetail() {
   );
 }
 
-// 样式部分
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FDF6E3' },
   header: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 2, borderBottomColor: '#EFEBE0' },
@@ -240,7 +229,6 @@ const styles = StyleSheet.create({
   descText: { fontSize: 13, color: '#A1887F', fontStyle: 'italic', marginBottom: 8, lineHeight: 18 },
   quantityText: { color: '#78C8A0', fontSize: 13, fontWeight: 'bold', marginTop: 4 },
   
-  // 👈 物品右侧图片的样式（模拟无背景的精致圆角感）
   itemImageContainer: { width: 70, height: 70, borderRadius: 16, backgroundColor: '#FDF6E3', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#EFEBE0', marginLeft: 10 },
   itemImage: { width: '100%', height: '100%', resizeMode: 'cover' },
 
@@ -259,7 +247,6 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: '#FDF6E3', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5, maxHeight: '90%' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#5D4037', marginBottom: 15, textAlign: 'center' },
   
-  // 👈 弹窗里的照片上传区样式
   imageUploadSection: { alignItems: 'center', marginBottom: 15 },
   imageUploadBtn: { width: 100, height: 100, borderRadius: 20, backgroundColor: '#EFEBE0', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 2, borderColor: '#D7CCC8', borderStyle: 'dashed' },
   imageUploadText: { color: '#8D6E63', fontWeight: 'bold', textAlign: 'center', fontSize: 13, padding: 5 },

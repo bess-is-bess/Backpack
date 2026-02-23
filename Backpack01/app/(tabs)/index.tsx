@@ -3,6 +3,18 @@ import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, KeyboardAvoidingView, Modal, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../supabase';
 
+const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('确定要退出当前账号吗？');
+      if (confirmed) await supabase.auth.signOut();
+    } else {
+      Alert.alert('退出登录', '确定要退出当前账号吗？', [
+        { text: '取消', style: 'cancel' },
+        { text: '退出', style: 'destructive', onPress: async () => await supabase.auth.signOut() }
+      ]);
+    }
+  };
+
 export default function CategoriesScreen() {
   const [categories, setCategories] = useState<any[]>([]);
   const router = useRouter();
@@ -132,6 +144,12 @@ export default function CategoriesScreen() {
           
           {/* 👈 右侧操作区：加入了“整理”按钮 */}
           <View style={styles.headerActions}>
+
+            {/* 👈 新增登出按钮 */}
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+              <Text style={styles.logoutBtnText}>登出</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity 
               style={[styles.editBtn, isEditing && styles.editBtnActive]} 
               onPress={() => setIsEditing(!isEditing)}
@@ -209,6 +227,9 @@ const styles = StyleSheet.create({
   
   // 👈 新增按钮组排版
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+
+  logoutBtn: { backgroundColor: '#FDF6E3', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#D7CCC8' },
+  logoutBtnText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 13 },
   
   // 👈 新增“整理”按钮的样式
   editBtn: { backgroundColor: '#EFEBE0', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },

@@ -32,14 +32,39 @@ export default function CategoryDetail() {
     fetchCategoryItems();
   }, [id]);
 
-  const fetchCategoryItems = async () => {
-    let { data } = await supabase.from('items').select('*').eq('category_id', id).order('created_at', { ascending: false });
+const fetchCategoryItems = async () => {
+    // 👈 1. 验证身份
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // 👈 2. 只查询当前分类下，且属于该用户的物品
+    let { data } = await supabase
+      .from('items')
+      .select('*')
+      .eq('category_id', id)
+      .eq('user_id', user.id) 
+      .order('created_at', { ascending: false });
+      
     if (data) setItems(data);
   };
 
   const handleAddItem = async () => {
     if (!newItemName.trim()) return; 
-    const { error } = await supabase.from('items').insert([{ category_id: id, name: newItemName, quantity: 0, to_buy: 0 }]);
+    
+    // 👈 1. 验证身份
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 👈 2. 存入物品时绑定 user_id
+    const { error } = await supabase
+      .from('items')
+      .insert([{ 
+        category_id: id, 
+        name: newItemName, 
+        quantity: 0, 
+        to_buy: 0,
+        user_id: user?.id 
+      }]);
+      
     if (!error) { setNewItemName(''); fetchCategoryItems(); }
   };
 
@@ -168,6 +193,7 @@ export default function CategoryDetail() {
           keyExtractor={(item: any) => item.id.toString()}
           contentContainerStyle={styles.listContainer}
           ListEmptyComponent={<Text style={styles.emptyText}>这里空空的，快来添加物品吧！🌱</Text>}
+          keyboardShouldPersistTaps="handled"
         />
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inputSection}>
@@ -181,47 +207,7 @@ export default function CategoryDetail() {
         </KeyboardAvoidingView>
 
         {/* 编辑物品弹窗 */}
-        <Modal visible={isModalVisible} transparent={true} animationType="slide">
-          <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
-              <Text style={styles.modalTitle}>✏️ 编辑物品信息</Text>
-              
-              <View style={styles.imageUploadSection}>
-                <TouchableOpacity style={styles.imageUploadBtn} onPress={pickImage}>
-                  {editImageUrl ? (
-                    <Image source={{ uri: editImageUrl }} style={styles.previewImage} />
-                  ) : (
-                    <Text style={styles.imageUploadText}>📸 添加/更换照片(正方形)</Text>
-                  )}
-                </TouchableOpacity>
-                {editImageUrl && (
-                  <TouchableOpacity onPress={() => setEditImageUrl(null)} style={styles.removeImageBtn}>
-                     <Text style={styles.removeImageText}>清除照片</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* ... 其他输入框 ... */}
-              <Text style={styles.modalLabel}>物品名称</Text>
-              <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} />
-              <Text style={styles.modalLabel}>当前数量</Text>
-              <TextInput style={styles.modalInput} value={editQuantity} onChangeText={setEditQuantity} keyboardType="numeric" />
-              <Text style={styles.modalLabel}>价钱 (可选)</Text>
-              <TextInput style={styles.modalInput} value={editPrice} onChangeText={setEditPrice} placeholderTextColor="#D7CCC8" />
-              <Text style={styles.modalLabel}>备注 Description (可选)</Text>
-              <TextInput style={[styles.modalInput, styles.textArea]} value={editDescription} onChangeText={setEditDescription} placeholderTextColor="#D7CCC8" multiline={true} numberOfLines={2} />
-              
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.modalCancelText}>取消</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalSaveBtn} onPress={saveEdit}>
-                  <Text style={styles.modalSaveText}>保存</Text>
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
-          </View>
-        </Modal>
+        
 
         {/* 👈 新增：图片放大预览弹窗 (灯箱) */}
         <Modal visible={zoomedImageUrl !== null} transparent={true} animationType="fade">

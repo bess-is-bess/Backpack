@@ -49,13 +49,23 @@ export default function CategoriesScreen() {
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return;
 
+    // 👈 1. 必须先拿到当前用户对象
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      Alert.alert('错误', '登录状态已失效，请重新登录');
+      return;
+    }
+
+    // 👈 2. 插入时明确指定 user_id
     const { error } = await supabase
       .from('categories')
       .insert([
         {
           name: newCategoryName,
           icon: newCategoryIcon.trim() || '📦', 
-          is_default: false
+          is_default: false,
+          user_id: user.id // 关联到当前用户
         }
       ]);
 

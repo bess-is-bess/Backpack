@@ -157,7 +157,7 @@ export default function CategoryDetail() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>{'< 返回'}</Text>
+            <Text style={styles.backBtnText}>{'返回'}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>{name} 收纳盒 📦</Text>
         </View>

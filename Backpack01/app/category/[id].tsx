@@ -1,8 +1,10 @@
+import React, { useEffect, useState } from 'react';
+import { Alert, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+// 👈 修复警告 1: 改用最新的安全区组件
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, FlatList, Image, KeyboardAvoidingView, Modal, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../supabase';
 
 export default function CategoryDetail() {
@@ -60,7 +62,6 @@ export default function CategoryDetail() {
     setModalVisible(true);
   };
 
-  // 👈 核心升级：调用相册并动态识别图片格式
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -69,15 +70,15 @@ export default function CategoryDetail() {
     }
 
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1], // 强制裁剪成正方形
+      // 👈 修复警告 2: 使用最新的数组格式 API
+      mediaTypes: ['images'], 
+      // 👈 核心修复: 必须关闭编辑功能！否则 iOS 会把透明 PNG 强制转成不透明的 JPEG
+      allowsEditing: false,  
       quality: 0.5,   
       base64: true,   
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      // 动态读取图片的 mimeType，如果是苹果原生抠出来的透明图，它会是 image/png，这样背景就不会变黑！
       const mimeType = result.assets[0].mimeType || 'image/png';
       const base64Image = `data:${mimeType};base64,${result.assets[0].base64}`;
       setEditImageUrl(base64Image); 
@@ -126,7 +127,6 @@ export default function CategoryDetail() {
             </Text>
           </View>
 
-          {/* 如果有照片，渲染在右侧 */}
           {item.image_url ? (
             <View style={styles.itemImageContainer}>
               <Image source={{ uri: item.image_url }} style={styles.itemImage} />
@@ -229,8 +229,17 @@ const styles = StyleSheet.create({
   descText: { fontSize: 13, color: '#A1887F', fontStyle: 'italic', marginBottom: 8, lineHeight: 18 },
   quantityText: { color: '#78C8A0', fontSize: 13, fontWeight: 'bold', marginTop: 4 },
   
-  itemImageContainer: { width: 70, height: 70, borderRadius: 16, backgroundColor: '#FDF6E3', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#EFEBE0', marginLeft: 10 },
-  itemImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+ // 👈 1. 物品卡片右侧的图片容器（纯净悬浮效果）
+  itemImageContainer: { 
+    width: 70, 
+    height: 70, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginLeft: 10,
+    backgroundColor: 'transparent', // 强制透明底
+    // 删除了原本的黄色背景、边框和圆角，让它像个真正的贴纸
+  },
+  itemImage: { width: '100%', height: '100%', resizeMode: 'contain' },
 
   swipeActionsContainer: { flexDirection: 'row' },
   swipeActionBtn: { justifyContent: 'center', alignItems: 'center', width: 75 },
@@ -248,9 +257,22 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#5D4037', marginBottom: 15, textAlign: 'center' },
   
   imageUploadSection: { alignItems: 'center', marginBottom: 15 },
-  imageUploadBtn: { width: 100, height: 100, borderRadius: 20, backgroundColor: '#EFEBE0', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 2, borderColor: '#D7CCC8', borderStyle: 'dashed' },
+  // 👈 2. 弹窗里的照片上传区（改为干净的白色底）
+  imageUploadBtn: { 
+    width: 100, 
+    height: 100, 
+    borderRadius: 20, 
+    backgroundColor: '#FFFFFF', // 从灰色改成了干净的白色
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    overflow: 'hidden', 
+    borderWidth: 2, 
+    borderColor: '#D7CCC8', 
+    borderStyle: 'dashed' 
+  },
   imageUploadText: { color: '#8D6E63', fontWeight: 'bold', textAlign: 'center', fontSize: 13, padding: 5 },
-  previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  // 👈 弹窗里的预览图也用 contain，避免变形
+  previewImage: { width: '100%', height: '100%', resizeMode: 'contain' },
   removeImageBtn: { marginTop: 8 },
   removeImageText: { color: '#EF5350', fontSize: 13, fontWeight: 'bold' },
 

@@ -178,9 +178,9 @@ export default function CategoryDetail() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.header}>
           <RNTouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>{'< 返回'}</Text>
+            <Text style={styles.backBtnText}>{'返回'}</Text>
           </RNTouchableOpacity>
-          <Text style={styles.title}>{icon || '📦'} {name} 博物馆</Text>
+          <Text style={styles.title}>{icon || '🏛️'} {name} 博物馆</Text>
         </View>
 
         <FlatList

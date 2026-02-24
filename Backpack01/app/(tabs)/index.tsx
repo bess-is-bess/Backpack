@@ -1,6 +1,5 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-// 🚀 确保引入了 Keyboard 和 TouchableWithoutFeedback
 import { Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { supabase } from '../../supabase';
 
@@ -20,9 +19,16 @@ export default function CategoriesScreen() {
   const [categories, setCategories] = useState<any[]>([]);
   const router = useRouter();
 
+  // 添加博物馆的状态
   const [isModalVisible, setModalVisible] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('');
+
+  // 🚀 新增：编辑博物馆的状态
+  const [isEditModalVisible, setEditModalVisible] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [editCategoryName, setEditCategoryName] = useState('');
+  const [editCategoryIcon, setEditCategoryIcon] = useState('');
 
   // 管理页面是否处于“整理模式”
   const [isEditing, setIsEditing] = useState(false);
@@ -63,7 +69,7 @@ export default function CategoriesScreen() {
       .insert([
         {
           name: newCategoryName,
-          icon: newCategoryIcon.trim() || '📦', 
+          icon: newCategoryIcon.trim() || '🏛️', 
           is_default: false,
           user_id: user.id 
         }
@@ -77,6 +83,36 @@ export default function CategoriesScreen() {
     } else {
       if (Platform.OS === 'web') window.alert('添加失败: ' + error.message);
       else Alert.alert('添加失败', error.message);
+    }
+  };
+
+  // 🚀 新增：打开编辑弹窗
+  const openEditCategoryModal = (item: any) => {
+    setEditingCategory(item);
+    setEditCategoryName(item.name);
+    setEditCategoryIcon(item.icon || '🏛️');
+    setEditModalVisible(true);
+  };
+
+  // 🚀 新增：保存博物馆修改
+  const handleSaveEditCategory = async () => {
+    if (!editCategoryName.trim() || !editingCategory) return;
+    
+    const { error } = await supabase
+      .from('categories')
+      .update({
+        name: editCategoryName,
+        icon: editCategoryIcon.trim() || '🏛️'
+      })
+      .eq('id', editingCategory.id);
+
+    if (!error) {
+      setEditModalVisible(false);
+      setEditingCategory(null);
+      fetchData();
+    } else {
+      if (Platform.OS === 'web') window.alert('保存失败: ' + error.message);
+      else Alert.alert('保存失败', error.message);
     }
   };
 
@@ -125,7 +161,10 @@ export default function CategoriesScreen() {
         }
       }}
       onLongPress={() => {
-        if (!isEditing) handleDeleteCategory(item);
+        // 🚀 修改：平常模式下长按变成“修改名称”，不再是删除
+        if (!isEditing) {
+          openEditCategoryModal(item);
+        }
       }}
       activeOpacity={0.7}
     >
@@ -135,7 +174,7 @@ export default function CategoriesScreen() {
         </View>
       )}
       
-      <Text style={styles.cardIcon}>{item.icon || '📦'}</Text>
+      <Text style={styles.cardIcon}>{item.icon || '🏛️'}</Text>
       <Text style={styles.cardTitle}>{item.name}</Text>
     </TouchableOpacity>
   );
@@ -146,7 +185,8 @@ export default function CategoriesScreen() {
       
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>🗂️ 我的陈列</Text>
+          {/* 🚀 提示文案更新 */}
+          <Text style={styles.sectionTitle}>🗂️ 我的陈列 (长按修改)</Text>
           
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -179,7 +219,7 @@ export default function CategoriesScreen() {
         />
       </View>
 
-      {/* 🚀 核心修复：加入 Web 端兼容的 Keyboard 拦截外壳 */}
+      {/* 打造新博物馆弹窗 */}
       <Modal visible={isModalVisible} transparent={true} animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
@@ -199,7 +239,7 @@ export default function CategoriesScreen() {
                 <Text style={styles.modalLabel}>专属 Emoji (可选)</Text>
                 <TextInput 
                   style={[styles.modalInput, { textAlign: 'center', fontSize: 24 }]} 
-                  placeholder="📦"
+                  placeholder="🏛️"
                   placeholderTextColor="#D7CCC8"
                   value={newCategoryIcon} 
                   onChangeText={setNewCategoryIcon} 
@@ -212,6 +252,43 @@ export default function CategoriesScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddCategory}>
                     <Text style={styles.modalSaveText}>创建</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 🚀 新增：修改博物馆信息的弹窗 */}
+      <Modal visible={isEditModalVisible} transparent={true} animationType="slide">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
+            <TouchableWithoutFeedback onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
+              <View style={{ width: '100%' }}>
+                <Text style={styles.modalTitle}>✏️ 修改博物馆信息</Text>
+                
+                <Text style={styles.modalLabel}>博物馆名称</Text>
+                <TextInput 
+                  style={styles.modalInput} 
+                  value={editCategoryName} 
+                  onChangeText={setEditCategoryName} 
+                />
+                
+                <Text style={styles.modalLabel}>更换 Emoji (可选)</Text>
+                <TextInput 
+                  style={[styles.modalInput, { textAlign: 'center', fontSize: 24 }]} 
+                  value={editCategoryIcon} 
+                  onChangeText={setEditCategoryIcon} 
+                  maxLength={2} 
+                />
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setEditModalVisible(false)}>
+                    <Text style={styles.modalCancelText}>取消</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveEditCategory}>
+                    <Text style={styles.modalSaveText}>保存</Text>
                   </TouchableOpacity>
                 </View>
               </View>

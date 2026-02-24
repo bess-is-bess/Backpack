@@ -122,7 +122,7 @@ export default function CategoriesScreen() {
         } else {
           router.push({
             pathname: '/category/[id]' as any,
-            params: { id: item.id, name: item.name }
+            params: { id: item.id, name: item.name, icon: item.icon }
           });
         }
       }}

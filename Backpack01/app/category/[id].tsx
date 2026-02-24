@@ -6,7 +6,8 @@ import { GestureHandlerRootView, Swipeable, TouchableOpacity } from 'react-nativ
 import { supabase } from '../../supabase';
 
 export default function CategoryDetail() {
-  const { id, name } = useLocalSearchParams(); 
+  // 🚀 核心修复 1：接收上个页面传来的 icon
+  const { id, name, icon } = useLocalSearchParams(); 
   const router = useRouter();
   
   const [items, setItems] = useState<any[]>([]);
@@ -19,7 +20,7 @@ export default function CategoryDetail() {
   const [editPrice, setEditPrice] = useState('');
   const [editDescription, setEditDescription] = useState(''); 
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
-  const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null); // 👈 找回图片放大状态
+  const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCategoryItems();
@@ -32,8 +33,28 @@ export default function CategoryDetail() {
 
   const handleAddItem = async () => {
     if (!newItemName.trim()) return; 
-    const { error } = await supabase.from('items').insert([{ category_id: id, name: newItemName, quantity: 0, to_buy: 0 }]);
-    if (!error) { setNewItemName(''); fetchCategoryItems(); }
+    
+    // 🚀 核心修复 2：添加物品时必须包含 user_id，否则 RLS 会拦截导致添加失败
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      Alert.alert('错误', '请先登录');
+      return;
+    }
+
+    const { error } = await supabase.from('items').insert([{ 
+      category_id: id, 
+      name: newItemName, 
+      quantity: 0, 
+      to_buy: 0,
+      user_id: user.id
+    }]);
+
+    if (!error) { 
+      setNewItemName(''); 
+      fetchCategoryItems(); 
+    } else {
+      Alert.alert('添加失败', error.message);
+    }
   };
 
   const handleAddMoreToBuy = async (item: any) => {
@@ -113,7 +134,6 @@ export default function CategoryDetail() {
 
   const renderRightActions = (item: any) => (
     <View style={styles.swipeActionsContainer}>
-      {/* 🚀 修复 2：左滑按钮换回 RNTouchableOpacity，并且在 styles 里加了 height: '100%' */}
       <RNTouchableOpacity style={[styles.swipeActionBtn, { backgroundColor: '#FFB74D' }]} onPress={() => handleAddMoreToBuy(item)}>
         <Text style={styles.swipeActionText}>+1</Text>
       </RNTouchableOpacity>
@@ -126,11 +146,7 @@ export default function CategoryDetail() {
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.swipeContainer}>
       <Swipeable renderRightActions={() => renderRightActions(item)} overshootRight={false}>
-        
-        {/* 🚀 修复核心：把外层换成普通的 View，不再统揽全局的点击事件 */}
         <View style={styles.itemCard}>
-          
-          {/* 👈 左侧区域：点击文字部分 -> 打开编辑弹窗 */}
           <TouchableOpacity 
             style={styles.itemInfo} 
             activeOpacity={0.6}
@@ -144,7 +160,6 @@ export default function CategoryDetail() {
             </Text>
           </TouchableOpacity>
 
-          {/* 👉 右侧区域：点击图片 -> 独立触发放大查看 */}
           {item.image_url ? (
             <RNTouchableOpacity 
               style={styles.itemImageContainer}
@@ -154,9 +169,7 @@ export default function CategoryDetail() {
               <Image source={{ uri: item.image_url }} style={styles.itemImage} />
             </RNTouchableOpacity>
           ) : null}
-
         </View>
-
       </Swipeable>
     </View>
   );
@@ -169,7 +182,8 @@ export default function CategoryDetail() {
           <RNTouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backBtnText}>{'< 返回'}</Text>
           </RNTouchableOpacity>
-          <Text style={styles.title}>{name} 收纳盒 📦</Text>
+          {/* 🚀 核心修复 3：显示用户自定义的 Emoji */}
+          <Text style={styles.title}>{icon || '📦'} {name} 收纳盒</Text>
         </View>
 
         <FlatList
@@ -190,7 +204,6 @@ export default function CategoryDetail() {
           </RNTouchableOpacity>
         </KeyboardAvoidingView>
 
-        {/* 纯净无错版的编辑弹窗 */}
         <Modal visible={isModalVisible} transparent={true} animationType="slide">
           <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Keyboard.dismiss}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
@@ -236,7 +249,6 @@ export default function CategoryDetail() {
           </RNTouchableOpacity>
         </Modal>
 
-        {/* 🚀 找回丢失的图片放大 Modal */}
         <Modal visible={zoomedImageUrl !== null} transparent={true} animationType="fade">
           <RNTouchableOpacity style={styles.zoomModalOverlay} activeOpacity={1} onPress={() => setZoomedImageUrl(null)}>
             <Image source={{ uri: zoomedImageUrl || '' }} style={styles.zoomedImage} resizeMode="contain" />
@@ -265,12 +277,9 @@ const styles = StyleSheet.create({
   quantityText: { color: '#78C8A0', fontSize: 13, fontWeight: 'bold', marginTop: 4 },
   itemImageContainer: { width: 70, height: 70, borderRadius: 16, backgroundColor: '#FDF6E3', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#EFEBE0', marginLeft: 10 },
   itemImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  
-  // 🚀 核心样式修复：加入了 height: '100%' 保证左滑按钮撑满高度
   swipeActionsContainer: { flexDirection: 'row', height: '100%' },
   swipeActionBtn: { justifyContent: 'center', alignItems: 'center', width: 75, height: '100%' },
   swipeActionText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
-  
   inputSection: { padding: 25, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EFEBE0', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
   inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#78C8A0', marginBottom: 15 },
   inputRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
@@ -294,8 +303,6 @@ const styles = StyleSheet.create({
   modalCancelText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 16 },
   modalSaveBtn: { flex: 1, backgroundColor: '#78C8A0', padding: 15, borderRadius: 14, marginLeft: 10, alignItems: 'center' },
   modalSaveText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
-
-  // 🚀 找回放大的样式
   zoomModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   zoomedImage: { width: '100%', height: '80%' }
 });

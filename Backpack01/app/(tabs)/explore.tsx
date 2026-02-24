@@ -271,8 +271,8 @@ const styles = StyleSheet.create({
   section: { flex: 1, marginBottom: 30 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#5D4037', marginBottom: 15, marginLeft: 5 },
   
-  swipeContainer: { marginBottom: 12, borderRadius: 16, borderWidth: 2, borderColor: '#C8E6C9', overflow: 'hidden', backgroundColor: '#E8F5E9' },
-  shoppingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#E8F5E9', padding: 18 },
+  swipeContainer: { marginBottom: 12, marginHorizontal: 10, borderRadius: 16, borderWidth: 2, borderColor: '#C8E6C9', overflow: 'hidden', backgroundColor: '#E8F5E9' },
+  shoppingItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#E8F5E9', padding: 15 },
   itemInfo: { flex: 1, paddingRight: 10 },
   itemText: { fontSize: 18, color: '#2E7D32', fontWeight: 'bold' },
   descText: { fontSize: 13, color: '#66BB6A', fontStyle: 'italic', marginTop: 4, lineHeight: 18 },

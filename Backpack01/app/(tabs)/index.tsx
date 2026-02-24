@@ -186,7 +186,7 @@ export default function CategoriesScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           {/* 🚀 提示文案更新 */}
-          <Text style={styles.sectionTitle}>🗂️ 我的陈列 (长按修改)</Text>
+          <Text style={styles.sectionTitle}>我的陈列(长按修改)</Text>
           
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>

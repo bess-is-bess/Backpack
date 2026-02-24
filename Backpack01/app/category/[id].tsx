@@ -10,7 +10,11 @@ export default function CategoryDetail() {
   const router = useRouter();
   
   const [items, setItems] = useState<any[]>([]);
+
+  // 🚀 新增：控制添加藏品弹窗的显示状态
+  const [isAddModalVisible, setAddModalVisible] = useState(false);
   const [newItemName, setNewItemName] = useState('');
+  const [newItemQuantity, setNewItemQuantity] = useState('1'); // 默认添加数量为 1
 
   const [isModalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -30,28 +34,37 @@ export default function CategoryDetail() {
     if (data) setItems(data);
   };
 
+  // 🚀 修改：通过弹窗添加物品的函数
   const handleAddItem = async () => {
-    if (!newItemName.trim()) return; 
+    if (!newItemName.trim()) {
+      if (Platform.OS === 'web') window.alert('请输入藏品名称');
+      else Alert.alert('提示', '请输入藏品名称');
+      return; 
+    }
     
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      Alert.alert('错误', '请先登录');
+      if (Platform.OS === 'web') window.alert('请先登录');
+      else Alert.alert('错误', '请先登录');
       return;
     }
 
     const { error } = await supabase.from('items').insert([{ 
       category_id: id, 
       name: newItemName, 
-      quantity: 0, 
+      quantity: parseInt(newItemQuantity) || 1, // 读取输入的数量
       to_buy: 0,
       user_id: user.id
     }]);
 
     if (!error) { 
       setNewItemName(''); 
+      setNewItemQuantity('1'); // 重置数量
+      setAddModalVisible(false); // 关闭弹窗
       fetchCategoryItems(); 
     } else {
-      Alert.alert('添加失败', error.message);
+      if (Platform.OS === 'web') window.alert('添加失败: ' + error.message);
+      else Alert.alert('添加失败', error.message);
     }
   };
 
@@ -133,7 +146,7 @@ export default function CategoryDetail() {
   const renderRightActions = (item: any) => (
     <View style={styles.swipeActionsContainer}>
       <RNTouchableOpacity style={[styles.swipeActionBtn, { backgroundColor: '#FFB74D' }]} onPress={() => handleAddMoreToBuy(item)}>
-        <Text style={styles.swipeActionText}>+1</Text>
+        <Text style={styles.swipeActionText}>待买+1</Text>
       </RNTouchableOpacity>
       <RNTouchableOpacity style={[styles.swipeActionBtn, { backgroundColor: '#EF5350' }]} onPress={() => handleDeleteItem(item)}>
         <Text style={styles.swipeActionText}>删除</Text>
@@ -176,11 +189,20 @@ export default function CategoryDetail() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
+        
+        {/* 🚀 头部修改：将原先居中靠左的标题排布，修改为两端对齐，并加入右上角的“+”按钮 */}
         <View style={styles.header}>
-          <RNTouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>{'返回'}</Text>
+          <View style={styles.headerLeft}>
+            <RNTouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+              <Text style={styles.backBtnText}>{'返回'}</Text>
+            </RNTouchableOpacity>
+            <Text style={styles.title} numberOfLines={1}>{icon || '🏛️'} {name} 博物馆</Text>
+          </View>
+
+          {/* 右上角的添加按钮 */}
+          <RNTouchableOpacity style={styles.headerAddBtn} onPress={() => setAddModalVisible(true)}>
+            <Text style={styles.headerAddBtnText}>+</Text>
           </RNTouchableOpacity>
-          <Text style={styles.title}>{icon || '🏛️'} {name} 博物馆</Text>
         </View>
 
         <FlatList
@@ -191,18 +213,49 @@ export default function CategoryDetail() {
           ListEmptyComponent={<Text style={styles.emptyText}>这里空空的，快来添加藏品吧！🌱</Text>}
         />
 
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inputSection}>
-          <Text style={styles.inputLabel}>✨ 登记新藏品 (轻点藏品卡片左侧可编辑，左滑更多选项)</Text>
-          <View style={styles.inputRow}>
-            <TextInput style={styles.nameInput} placeholder="物品名称 (如: 可乐)" value={newItemName} onChangeText={setNewItemName} placeholderTextColor="#A1887F" />
-          </View>
-          <RNTouchableOpacity style={styles.addBtn} onPress={handleAddItem}>
-            <Text style={styles.addBtnText}>加入博物馆</Text>
-          </RNTouchableOpacity>
-        </KeyboardAvoidingView>
+        {/* 🚀 移除底部固定的输入框区域，给列表腾出空间 */}
 
+        {/* 🚀 新增：添加藏品的专属弹窗 */}
+        <Modal visible={isAddModalVisible} transparent={true} animationType="slide">
+          <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
+              <TouchableWithoutFeedback onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
+                <View style={{ width: '100%' }}>
+                  <Text style={styles.modalTitle}>✨ 登记新藏品</Text>
+                  
+                  <Text style={styles.modalLabel}>藏品名称</Text>
+                  <TextInput 
+                    style={styles.modalInput} 
+                    placeholder="例如: 珍藏版可乐" 
+                    value={newItemName} 
+                    onChangeText={setNewItemName} 
+                    autoFocus 
+                  />
+                  
+                  <Text style={styles.modalLabel}>初始数量</Text>
+                  <TextInput 
+                    style={styles.modalInput} 
+                    value={newItemQuantity} 
+                    onChangeText={setNewItemQuantity} 
+                    keyboardType="numeric" 
+                  />
+                  
+                  <View style={styles.modalActions}>
+                    <RNTouchableOpacity style={styles.modalCancelBtn} onPress={() => setAddModalVisible(false)}>
+                      <Text style={styles.modalCancelText}>取消</Text>
+                    </RNTouchableOpacity>
+                    <RNTouchableOpacity style={styles.modalSaveBtn} onPress={handleAddItem}>
+                      <Text style={styles.modalSaveText}>加入博物馆</Text>
+                    </RNTouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+          </RNTouchableOpacity>
+        </Modal>
+
+        {/* 编辑藏品弹窗 (原样保留) */}
         <Modal visible={isModalVisible} transparent={true} animationType="slide">
-          {/* 🚀 核心修复：兼容 Web 端键盘收起 */}
           <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
               <TouchableWithoutFeedback onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
@@ -247,6 +300,7 @@ export default function CategoryDetail() {
           </RNTouchableOpacity>
         </Modal>
 
+        {/* 图片放大弹窗 (原样保留) */}
         <Modal visible={zoomedImageUrl !== null} transparent={true} animationType="fade">
           <RNTouchableOpacity style={styles.zoomModalOverlay} activeOpacity={1} onPress={() => setZoomedImageUrl(null)}>
             <Image source={{ uri: zoomedImageUrl || '' }} style={styles.zoomedImage} resizeMode="contain" />
@@ -260,12 +314,46 @@ export default function CategoryDetail() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FDF6E3' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 2, borderBottomColor: '#EFEBE0' },
+  
+  // 🚀 头部样式大改：支持两侧布局
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', // 让左右两端分开
+    paddingHorizontal: 20, 
+    paddingVertical: 15, // 稍微缩小一点高度
+    borderBottomWidth: 2, 
+    borderBottomColor: '#EFEBE0' 
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1, // 占据剩余空间，防止标题被按钮挤压
+  },
   backBtn: { marginRight: 15, padding: 10, backgroundColor: '#EFEBE0', borderRadius: 12 },
   backBtnText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 16 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#5D4037' },
-  listContainer: { padding: 20 },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#5D4037', flexShrink: 1 }, // 防止过长的名字撑破头部
+  
+  // 🚀 新增：右上角添加按钮的样式
+  headerAddBtn: { 
+    backgroundColor: '#78C8A0', 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginLeft: 10,
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 3, 
+    elevation: 2 
+  },
+  headerAddBtnText: { color: '#FFFFFF', fontSize: 26, fontWeight: 'bold', lineHeight: 28, textAlign: 'center' },
+
+  listContainer: { padding: 20, paddingBottom: 40 }, // 列表底部留一点空间
   emptyText: { textAlign: 'center', color: '#A1887F', marginTop: 40, fontSize: 16 },
+  
   swipeContainer: { marginBottom: 15, borderRadius: 20, backgroundColor: '#FFFFFF', shadowColor: '#78C8A0', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#EFEBE0', overflow: 'hidden' },
   itemCard: { backgroundColor: '#FFFFFF', padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   itemInfo: { flex: 1, paddingRight: 10 },
@@ -275,32 +363,32 @@ const styles = StyleSheet.create({
   quantityText: { color: '#78C8A0', fontSize: 13, fontWeight: 'bold', marginTop: 4 },
   itemImageContainer: { width: 70, height: 70, borderRadius: 16, backgroundColor: '#FDF6E3', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#EFEBE0', marginLeft: 10 },
   itemImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  
   swipeActionsContainer: { flexDirection: 'row', height: '100%' },
   swipeActionBtn: { justifyContent: 'center', alignItems: 'center', width: 75, height: '100%' },
   swipeActionText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
-  inputSection: { padding: 25, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EFEBE0', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
-  inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#78C8A0', marginBottom: 15 },
-  inputRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-  nameInput: { flex: 1, backgroundColor: '#FDF6E3', borderRadius: 16, padding: 18, color: '#5D4037', fontWeight: '600', fontSize: 16 },
-  addBtn: { backgroundColor: '#78C8A0', padding: 18, borderRadius: 16, alignItems: 'center' },
-  addBtnText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
+  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FDF6E3', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5, maxHeight: '90%' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#5D4037', marginBottom: 15, textAlign: 'center' },
+  
   imageUploadSection: { alignItems: 'center', marginBottom: 15 },
   imageUploadBtn: { width: 100, height: 100, borderRadius: 20, backgroundColor: '#EFEBE0', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 2, borderColor: '#D7CCC8', borderStyle: 'dashed' },
   imageUploadText: { color: '#8D6E63', fontWeight: 'bold', textAlign: 'center', fontSize: 13, padding: 5 },
   previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   removeImageBtn: { marginTop: 8 },
   removeImageText: { color: '#EF5350', fontSize: 13, fontWeight: 'bold' },
+  
   modalLabel: { fontSize: 14, fontWeight: 'bold', color: '#8D6E63', marginBottom: 6, marginTop: 10 },
   modalInput: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, color: '#5D4037', fontWeight: '500', borderWidth: 1, borderColor: '#EFEBE0', fontSize: 15 },
   textArea: { minHeight: 60, textAlignVertical: 'top' }, 
+  
   modalActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, marginBottom: Platform.OS === 'ios' ? 20 : 0 },
   modalCancelBtn: { flex: 1, backgroundColor: '#EFEBE0', padding: 15, borderRadius: 14, marginRight: 10, alignItems: 'center' },
   modalCancelText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 16 },
   modalSaveBtn: { flex: 1, backgroundColor: '#78C8A0', padding: 15, borderRadius: 14, marginLeft: 10, alignItems: 'center' },
   modalSaveText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
+  
   zoomModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
   zoomedImage: { width: '100%', height: '80%' }
 });

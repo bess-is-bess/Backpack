@@ -6,7 +6,6 @@ import { GestureHandlerRootView, Swipeable, TouchableOpacity } from 'react-nativ
 import { supabase } from '../../supabase';
 
 export default function CategoryDetail() {
-  // 🚀 核心修复 1：接收上个页面传来的 icon
   const { id, name, icon } = useLocalSearchParams(); 
   const router = useRouter();
   
@@ -34,7 +33,6 @@ export default function CategoryDetail() {
   const handleAddItem = async () => {
     if (!newItemName.trim()) return; 
     
-    // 🚀 核心修复 2：添加物品时必须包含 user_id，否则 RLS 会拦截导致添加失败
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       Alert.alert('错误', '请先登录');
@@ -64,13 +62,13 @@ export default function CategoryDetail() {
 
   const handleDeleteItem = async (item: any) => {
     if (Platform.OS === 'web') {
-      const confirmed = window.confirm(`彻底丢弃\n\n确定要把 "${item.name}" 从你的收纳盒中永远扔掉吗？`);
+      const confirmed = window.confirm(`彻底丢弃\n\n确定要把 "${item.name}" 从你的博物馆中永远扔掉吗？`);
       if (confirmed) {
         const { error } = await supabase.from('items').delete().eq('id', item.id);
         if (!error) fetchCategoryItems();
       }
     } else {
-      Alert.alert('彻底丢弃', `确定要把 "${item.name}" 从你的收纳盒中永远扔掉吗？`, [
+      Alert.alert('彻底丢弃', `确定要把 "${item.name}" 从你的博物馆中永远扔掉吗？`, [
         { text: '取消', style: 'cancel' },
         { text: '扔掉', style: 'destructive', onPress: async () => {
             const { error } = await supabase.from('items').delete().eq('id', item.id);
@@ -182,8 +180,7 @@ export default function CategoryDetail() {
           <RNTouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backBtnText}>{'< 返回'}</Text>
           </RNTouchableOpacity>
-          {/* 🚀 核心修复 3：显示用户自定义的 Emoji */}
-          <Text style={styles.title}>{icon || '📦'} {name} 收纳盒</Text>
+          <Text style={styles.title}>{icon || '📦'} {name} 博物馆</Text>
         </View>
 
         <FlatList
@@ -191,23 +188,24 @@ export default function CategoryDetail() {
           renderItem={renderItem}
           keyExtractor={(item: any) => item.id.toString()}
           contentContainerStyle={styles.listContainer}
-          ListEmptyComponent={<Text style={styles.emptyText}>这里空空的，快来添加物品吧！🌱</Text>}
+          ListEmptyComponent={<Text style={styles.emptyText}>这里空空的，快来添加藏品吧！🌱</Text>}
         />
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inputSection}>
-          <Text style={styles.inputLabel}>✨ 登记新物品 (轻点可编辑/加图，左滑更多选项)</Text>
+          <Text style={styles.inputLabel}>✨ 登记新藏品 (轻点藏品卡片左侧可编辑，左滑更多选项)</Text>
           <View style={styles.inputRow}>
             <TextInput style={styles.nameInput} placeholder="物品名称 (如: 可乐)" value={newItemName} onChangeText={setNewItemName} placeholderTextColor="#A1887F" />
           </View>
           <RNTouchableOpacity style={styles.addBtn} onPress={handleAddItem}>
-            <Text style={styles.addBtnText}>加入收纳</Text>
+            <Text style={styles.addBtnText}>加入博物馆</Text>
           </RNTouchableOpacity>
         </KeyboardAvoidingView>
 
         <Modal visible={isModalVisible} transparent={true} animationType="slide">
-          <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Keyboard.dismiss}>
+          {/* 🚀 核心修复：兼容 Web 端键盘收起 */}
+          <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
-              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <TouchableWithoutFeedback onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
                 <View style={{ width: '100%' }}>
                   <Text style={styles.modalTitle}>✏️ 编辑物品信息</Text>
                   
@@ -226,7 +224,7 @@ export default function CategoryDetail() {
                     ) : null}
                   </View>
 
-                  <Text style={styles.modalLabel}>物品名称</Text>
+                  <Text style={styles.modalLabel}>藏品名称</Text>
                   <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} />
                   <Text style={styles.modalLabel}>当前数量</Text>
                   <TextInput style={styles.modalInput} value={editQuantity} onChangeText={setEditQuantity} keyboardType="numeric" />

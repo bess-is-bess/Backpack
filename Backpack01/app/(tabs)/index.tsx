@@ -1,6 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Alert, FlatList, KeyboardAvoidingView, Modal, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+// 🚀 确保引入了 Keyboard 和 TouchableWithoutFeedback
+import { Alert, FlatList, Keyboard, KeyboardAvoidingView, Modal, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { supabase } from '../../supabase';
 
 const handleLogout = async () => {
@@ -13,7 +14,7 @@ const handleLogout = async () => {
         { text: '退出', style: 'destructive', onPress: async () => await supabase.auth.signOut() }
       ]);
     }
-  };
+};
 
 export default function CategoriesScreen() {
   const [categories, setCategories] = useState<any[]>([]);
@@ -23,7 +24,7 @@ export default function CategoriesScreen() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryIcon, setNewCategoryIcon] = useState('');
 
-  // 👈 新增：管理页面是否处于“整理模式”
+  // 管理页面是否处于“整理模式”
   const [isEditing, setIsEditing] = useState(false);
 
   useFocusEffect(
@@ -49,15 +50,14 @@ export default function CategoriesScreen() {
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) return;
 
-    // 👈 1. 必须先拿到当前用户对象
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      Alert.alert('错误', '登录状态已失效，请重新登录');
+      if (Platform.OS === 'web') window.alert('登录状态已失效，请重新登录');
+      else Alert.alert('错误', '登录状态已失效，请重新登录');
       return;
     }
 
-    // 👈 2. 插入时明确指定 user_id
     const { error } = await supabase
       .from('categories')
       .insert([
@@ -65,7 +65,7 @@ export default function CategoriesScreen() {
           name: newCategoryName,
           icon: newCategoryIcon.trim() || '📦', 
           is_default: false,
-          user_id: user.id // 关联到当前用户
+          user_id: user.id 
         }
       ]);
 
@@ -80,7 +80,6 @@ export default function CategoriesScreen() {
     }
   };
 
-  // 抽出删除数据库的独立函数
   const deleteCategoryFromDB = async (id: string) => {
     const { error } = await supabase.from('categories').delete().eq('id', id);
     if (!error) fetchData();
@@ -90,21 +89,20 @@ export default function CategoriesScreen() {
     }
   };
 
-  // 👈 智能分发：Web 端用浏览器自带弹窗，手机端用原生 Alert
   const handleDeleteCategory = (item: any) => {
     if (Platform.OS === 'web') {
-      const confirmed = window.confirm(`🗑️ 丢弃收纳盒\n\n确定要扔掉 "${item.name}" 吗？里面的物品也会被一起清理掉哦！`);
+      const confirmed = window.confirm(`🗑️ 丢弃博物馆\n\n确定要拆掉 "${item.name}" 吗？里面的藏品也会被一起清理掉哦！`);
       if (confirmed) {
         deleteCategoryFromDB(item.id);
       }
     } else {
       Alert.alert(
-        '🗑️ 丢弃收纳盒',
-        `确定要扔掉 "${item.name}" 吗？里面的物品也会被一起清理掉哦！`,
+        '🗑️ 拆掉博物馆',
+        `确定要拆掉 "${item.name}" 吗？里面的藏品也会被一起清理掉哦！`,
         [
           { text: '保留', style: 'cancel' },
           { 
-            text: '扔掉', 
+            text: '拆掉', 
             style: 'destructive', 
             onPress: () => deleteCategoryFromDB(item.id) 
           }
@@ -131,7 +129,6 @@ export default function CategoriesScreen() {
       }}
       activeOpacity={0.7}
     >
-      {/* 👈 小红点代码放在这里，它会乖乖待在卡片内部 */}
       {isEditing && (
         <View style={styles.deleteBadge}>
           <Text style={styles.deleteBadgeText}>-</Text>
@@ -143,19 +140,15 @@ export default function CategoriesScreen() {
     </TouchableOpacity>
   );
 
-
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.headerTitle}>My Backpack 🏕️</Text>
       
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>🗂️ 我的收纳</Text>
+          <Text style={styles.sectionTitle}>🗂️ 我的陈列</Text>
           
-          {/* 👈 右侧操作区：加入了“整理”按钮 */}
           <View style={styles.headerActions}>
-
-            {/* 👈 新增登出按钮 */}
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
               <Text style={styles.logoutBtnText}>登出</Text>
             </TouchableOpacity>
@@ -186,47 +179,52 @@ export default function CategoriesScreen() {
         />
       </View>
 
+      {/* 🚀 核心修复：加入 Web 端兼容的 Keyboard 拦截外壳 */}
       <Modal visible={isModalVisible} transparent={true} animationType="slide">
-        <View style={styles.modalOverlay}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
-            <Text style={styles.modalTitle}>✨ 打造新收纳盒</Text>
-            
-            <Text style={styles.modalLabel}>盒子名称</Text>
-            <TextInput 
-              style={styles.modalInput} 
-              placeholder="例如: 办公用品"
-              placeholderTextColor="#D7CCC8"
-              value={newCategoryName} 
-              onChangeText={setNewCategoryName} 
-            />
-            
-            <Text style={styles.modalLabel}>专属 Emoji (可选)</Text>
-            <TextInput 
-              style={[styles.modalInput, { textAlign: 'center', fontSize: 24 }]} 
-              placeholder="📦"
-              placeholderTextColor="#D7CCC8"
-              value={newCategoryIcon} 
-              onChangeText={setNewCategoryIcon} 
-              maxLength={2} 
-            />
+            <TouchableWithoutFeedback onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
+              <View style={{ width: '100%' }}>
+                <Text style={styles.modalTitle}>✨ 打造新博物馆</Text>
+                
+                <Text style={styles.modalLabel}>博物馆名称</Text>
+                <TextInput 
+                  style={styles.modalInput} 
+                  placeholder="例如: 办公用品"
+                  placeholderTextColor="#D7CCC8"
+                  value={newCategoryName} 
+                  onChangeText={setNewCategoryName} 
+                />
+                
+                <Text style={styles.modalLabel}>专属 Emoji (可选)</Text>
+                <TextInput 
+                  style={[styles.modalInput, { textAlign: 'center', fontSize: 24 }]} 
+                  placeholder="📦"
+                  placeholderTextColor="#D7CCC8"
+                  value={newCategoryIcon} 
+                  onChangeText={setNewCategoryIcon} 
+                  maxLength={2} 
+                />
 
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalCancelText}>取消</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddCategory}>
-                <Text style={styles.modalSaveText}>创建</Text>
-              </TouchableOpacity>
-            </View>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalVisible(false)}>
+                    <Text style={styles.modalCancelText}>取消</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddCategory}>
+                    <Text style={styles.modalSaveText}>创建</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
     </SafeAreaView>
   );
 }
 
-// 样式部分
+// 样式部分（保持你的优秀设计不变）
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FDF6E3' },
   headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#8D6E63', marginTop: 20, marginBottom: 15, textAlign: 'center' },
@@ -235,24 +233,21 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, paddingHorizontal: 5 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#5D4037' },
   
-  // 👈 新增按钮组排版
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 
   logoutBtn: { backgroundColor: '#FDF6E3', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: '#D7CCC8' },
   logoutBtnText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 13 },
   
-  // 👈 新增“整理”按钮的样式
   editBtn: { backgroundColor: '#EFEBE0', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },
-  editBtnActive: { backgroundColor: '#EF5350' }, // 激活时变成亮眼提示色
+  editBtnActive: { backgroundColor: '#EF5350' }, 
   editBtnText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 14 },
   editBtnTextActive: { color: '#FFFFFF' },
 
   addIconBtn: { backgroundColor: '#78C8A0', width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
   addIconText: { color: '#FFFFFF', fontSize: 24, fontWeight: 'bold', lineHeight: 26, textAlign: 'center' },
 
-row: { justifyContent: 'space-between', marginBottom: 15 },
+  row: { justifyContent: 'space-between', marginBottom: 15 },
   
-  // 👈 还原为一个干净的卡片样式
   card: { 
     backgroundColor: '#FFFFFF', 
     width: '47%', 
@@ -266,17 +261,16 @@ row: { justifyContent: 'space-between', marginBottom: 15 },
     elevation: 3, 
     borderWidth: 2, 
     borderColor: '#EFEBE0',
-    position: 'relative' // 确保内部的绝对定位生效
+    position: 'relative' 
   },
   
   cardIcon: { fontSize: 36, marginBottom: 10 },
   cardTitle: { fontSize: 16, fontWeight: '600', color: '#8D6E63' },
   
-  // 👈 核心修复：把 top 和 right 从 -8 改成 10 (正数)，把它拉回卡片内部！
   deleteBadge: { 
     position: 'absolute', 
-    top: 10,     // 距离顶部 10 像素
-    right: 10,   // 距离右边 10 像素
+    top: 10,     
+    right: 10,   
     backgroundColor: '#EF5350', 
     width: 28, 
     height: 28, 

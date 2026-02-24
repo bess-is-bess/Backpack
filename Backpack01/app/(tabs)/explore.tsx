@@ -48,7 +48,6 @@ export default function ShoppingListScreen() {
     }
   };
 
-  // 👈 修改：不再需要双击购买，直接作为独立函数
   const executePurchase = async (item: any) => {
     const newQuantity = item.quantity + item.to_buy; 
     await supabase.from('items').update({ quantity: newQuantity, to_buy: 0 }).eq('id', item.id);
@@ -67,7 +66,7 @@ export default function ShoppingListScreen() {
 
   const handleAddNewItem = async () => {
     if (!newItemName.trim() || !selectedCategoryId) {
-      Alert.alert("提示", "请输入物品名称并选择一个收纳盒分类！");
+      Alert.alert("提示", "请输入物品名称并选择一个博物馆分类！");
       return;
     }
     const { data: { user } } = await supabase.auth.getUser();
@@ -111,7 +110,6 @@ export default function ShoppingListScreen() {
 
   const renderRightActions = (item: any) => (
     <View style={styles.swipeActionsContainer}>
-      {/* 🚀 新增：把“买入”操作放进左滑菜单中 */}
       <RNTouchableOpacity style={[styles.swipeActionBtn, { backgroundColor: '#66BB6A' }]} onPress={() => executePurchase(item)}>
         <Text style={styles.swipeActionText}>买入</Text>
       </RNTouchableOpacity>
@@ -119,7 +117,7 @@ export default function ShoppingListScreen() {
         <Text style={styles.swipeActionText}>+1</Text>
       </RNTouchableOpacity>
       <RNTouchableOpacity style={[styles.swipeActionBtn, { backgroundColor: '#EF5350' }]} onPress={() => handleRemoveFromList(item)}>
-        <Text style={styles.swipeActionText}>划掉</Text>
+        <Text style={styles.swipeActionText}>移除</Text>
       </RNTouchableOpacity>
     </View>
   );
@@ -129,7 +127,6 @@ export default function ShoppingListScreen() {
       <Swipeable renderRightActions={() => renderRightActions(item)} overshootRight={false}>
         <View style={styles.shoppingItem}>
           
-          {/* 🚀 核心修改：改为 onPress 单击触发编辑 */}
           <TouchableOpacity 
             style={styles.itemInfo} 
             activeOpacity={0.6}
@@ -162,7 +159,6 @@ export default function ShoppingListScreen() {
         <Text style={styles.headerTitle}>待买清单 🛒</Text>
         
         <View style={styles.section}>
-          {/* 🚀 提示文案同步更新 */}
           <Text style={styles.sectionTitle}>📝 购物单 (轻点编辑，左滑买入/更多选项)</Text>
           <FlatList
             data={shoppingList}
@@ -178,9 +174,10 @@ export default function ShoppingListScreen() {
         </RNTouchableOpacity>
 
         <Modal visible={isAddModalVisible} transparent={true} animationType="slide">
-          <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Keyboard.dismiss}>
+          {/* 🚀 核心修复：添加物品弹窗兼容 Web 键盘 */}
+          <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
-              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <TouchableWithoutFeedback onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
                 <View style={{ width: '100%' }}>
                   <Text style={styles.modalTitle}>✨ 添加待买物品</Text>
                   <TextInput style={styles.modalInput} placeholder="物品名称 (如: 牛奶)" value={newItemName} onChangeText={setNewItemName} autoFocus />
@@ -220,9 +217,10 @@ export default function ShoppingListScreen() {
         </Modal>
 
         <Modal visible={isEditModalVisible} transparent={true} animationType="slide">
-          <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Keyboard.dismiss}>
+          {/* 🚀 核心修复：修改物品弹窗兼容 Web 键盘 */}
+          <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
-              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <TouchableWithoutFeedback onPress={Platform.OS === 'web' ? undefined : Keyboard.dismiss}>
                 <View style={{ width: '100%' }}>
                   <Text style={styles.modalTitle}>✏️ 修改待买物品</Text>
                   <Text style={styles.modalLabel}>物品名称</Text>
@@ -234,7 +232,6 @@ export default function ShoppingListScreen() {
                     <RNTouchableOpacity style={styles.modalCancelBtn} onPress={() => setEditModalVisible(false)}>
                       <Text style={styles.modalCancelText}>取消</Text>
                     </RNTouchableOpacity>
-                    {/* 🚀 新增：编辑页内的快捷买入按钮 */}
                     <RNTouchableOpacity 
                       style={styles.modalBuyBtn} 
                       onPress={() => {
@@ -283,10 +280,9 @@ const styles = StyleSheet.create({
 
   emptyText: { color: '#A1887F', marginLeft: 5, fontStyle: 'italic', textAlign: 'center', marginTop: 40 },
   
-  // 🚀 修改：把按钮宽度稍微调小（65），确保三个按钮能完美放下
   swipeActionsContainer: { flexDirection: 'row', height: '100%' },
   swipeActionBtn: { justifyContent: 'center', alignItems: 'center', width: 65, height: '100%' },
-  swipeActionText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 }, // 字号微调
+  swipeActionText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 15 }, 
   
   fab: { position: 'absolute', right: 30, bottom: 110, width: 65, height: 65, borderRadius: 32.5, backgroundColor: '#B19CD9', justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#B19CD9', shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: {width:0, height:5} },
   fabIcon: { color: '#FFFFFF', fontSize: 40, fontWeight: '300', lineHeight: 45 },
@@ -301,7 +297,6 @@ const styles = StyleSheet.create({
   catBadgeText: { color: '#8D6E63', fontWeight: 'bold' },
   catBadgeTextSelected: { color: '#FFFFFF' },
   
-  // 🚀 修改：排版三个按钮的位置
   modalActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, marginBottom: Platform.OS === 'ios' ? 20 : 0 },
   modalCancelBtn: { flex: 1, backgroundColor: '#EFEBE0', padding: 15, borderRadius: 14, marginRight: 8, alignItems: 'center' },
   modalCancelText: { color: '#8D6E63', fontWeight: 'bold', fontSize: 16 },

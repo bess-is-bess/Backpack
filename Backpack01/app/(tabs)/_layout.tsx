@@ -13,18 +13,18 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         
-        // 🚀 终极绝杀：全平台“悬浮胶囊”导航栏
         tabBarStyle: Platform.select({
           web: { 
             position: 'absolute',
-            bottom: 25,          // 👈 距离屏幕底部 25px，彻底悬浮，避开所有物理死角！
-            left: 20,            // 两侧留白，形成胶囊感
+            bottom: 25,          
+            left: 20,            
             right: 20,
             backgroundColor: '#FFFFFF',
-            borderRadius: 25,    // 极致圆角
-            height: 65,          // 锁定舒适高度
-            paddingBottom: 0,    // 👈 清除所有默认内边距，防止内容被挤压
-            borderTopWidth: 0,   // 去除默认的一条丑陋顶线
+            borderRadius: 35,    // 变得更圆润，像完美的药丸形
+            height: 75,          // 👈 核心修复 1：稍微加高胶囊总体高度 (从 65 改为 75)
+            paddingBottom: 12,   // 👈 核心修复 2：把底部的文字“往上托”，防止被底边切掉
+            paddingTop: 12,      // 把顶部的图标“往下压”，实现绝对垂直居中
+            borderTopWidth: 0,   
             
             // 超有质感的悬浮阴影
             shadowColor: '#78C8A0',
@@ -37,17 +37,12 @@ export default function TabLayout() {
           default: { backgroundColor: '#FFFFFF' },
         }),
         
-        // 确保内部的图标和文字完美垂直居中
-        tabBarItemStyle: Platform.OS === 'web' ? {
-          paddingTop: 8,
-          paddingBottom: 8,
-        } : undefined,
+        // 👈 移除了之前多余的 tabBarItemStyle，防止它扰乱内部排版
 
-        // 优化文字大小和间距
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '600',
-          marginTop: 4, 
+          marginTop: 4, // 让文字和图标之间保留舒适距离
         }
       }}>
       <Tabs.Screen

@@ -21,7 +21,7 @@ export default function TabLayout() {
             right: 20,
             backgroundColor: '#FFFFFF',
             borderRadius: 35,    // 变得更圆润，像完美的药丸形
-            height: 65,          // 👈 核心修复 1：稍微加高胶囊总体高度 (从 65 改为 75)
+            height: 75,          // 👈 核心修复 1：稍微加高胶囊总体高度 (从 65 改为 75)
             paddingBottom: 8,   // 👈 核心修复 2：把底部的文字“往上托”，防止被底边切掉
             paddingTop: 12,      // 把顶部的图标“往下压”，实现绝对垂直居中
             borderTopWidth: 0,   

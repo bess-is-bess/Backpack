@@ -150,7 +150,7 @@ const fetchCategoryItems = async () => {
         <TouchableOpacity 
           style={styles.itemCard} 
           activeOpacity={0.7}
-          onLongPress={() => openEditModal(item)}
+          onPress={() => openEditModal(item)}
         >
           <View style={styles.itemInfo}>
             <Text style={styles.itemName}>{item.name}</Text>
@@ -197,7 +197,7 @@ const fetchCategoryItems = async () => {
         />
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inputSection}>
-          <Text style={styles.inputLabel}>✨ 登记新物品 (长按编辑，左滑选项，点击图片放大)</Text>
+          <Text style={styles.inputLabel}>✨ 登记新物品 (点击可编辑/加图，左滑更多选项)</Text>
           <View style={styles.inputRow}>
             <TextInput style={styles.nameInput} placeholder="物品名称 (如: 可乐)" value={newItemName} onChangeText={setNewItemName} placeholderTextColor="#A1887F" />
           </View>

@@ -1,13 +1,9 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, TouchableOpacity as RNTouchableOpacity, SafeAreaView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
+import { GestureHandlerRootView, Swipeable, TouchableOpacity } from 'react-native-gesture-handler';
 import { supabase } from '../../supabase';
-
-// 获取屏幕宽度，用于计算大图显示尺寸
-const { width: screenWidth } = Dimensions.get('window');
 
 export default function CategoryDetail() {
   const { id, name } = useLocalSearchParams(); 
@@ -16,7 +12,6 @@ export default function CategoryDetail() {
   const [items, setItems] = useState<any[]>([]);
   const [newItemName, setNewItemName] = useState('');
 
-  // 编辑弹窗状态
   const [isModalVisible, setModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [editName, setEditName] = useState('');           
@@ -24,47 +19,20 @@ export default function CategoryDetail() {
   const [editPrice, setEditPrice] = useState('');
   const [editDescription, setEditDescription] = useState(''); 
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null);
-
-  // 👈 新增：控制图片放大预览（灯箱）的状态，存储当前要放大的图片URL
-  const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null);
+  const [zoomedImageUrl, setZoomedImageUrl] = useState<string | null>(null); // 👈 找回图片放大状态
 
   useEffect(() => {
     fetchCategoryItems();
   }, [id]);
 
-const fetchCategoryItems = async () => {
-    // 👈 1. 验证身份
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // 👈 2. 只查询当前分类下，且属于该用户的物品
-    let { data } = await supabase
-      .from('items')
-      .select('*')
-      .eq('category_id', id)
-      .eq('user_id', user.id) 
-      .order('created_at', { ascending: false });
-      
+  const fetchCategoryItems = async () => {
+    let { data } = await supabase.from('items').select('*').eq('category_id', id).order('created_at', { ascending: false });
     if (data) setItems(data);
   };
 
   const handleAddItem = async () => {
     if (!newItemName.trim()) return; 
-    
-    // 👈 1. 验证身份
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // 👈 2. 存入物品时绑定 user_id
-    const { error } = await supabase
-      .from('items')
-      .insert([{ 
-        category_id: id, 
-        name: newItemName, 
-        quantity: 0, 
-        to_buy: 0,
-        user_id: user?.id 
-      }]);
-      
+    const { error } = await supabase.from('items').insert([{ category_id: id, name: newItemName, quantity: 0, to_buy: 0 }]);
     if (!error) { setNewItemName(''); fetchCategoryItems(); }
   };
 
@@ -74,13 +42,21 @@ const fetchCategoryItems = async () => {
   };
 
   const handleDeleteItem = async (item: any) => {
-    Alert.alert('彻底丢弃', `确定要把 "${item.name}" 从你的收纳盒中永远扔掉吗？`, [
-      { text: '取消', style: 'cancel' },
-      { text: '扔掉', style: 'destructive', onPress: async () => {
-          const { error } = await supabase.from('items').delete().eq('id', item.id);
-          if (!error) fetchCategoryItems();
-      }}
-    ]);
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(`彻底丢弃\n\n确定要把 "${item.name}" 从你的收纳盒中永远扔掉吗？`);
+      if (confirmed) {
+        const { error } = await supabase.from('items').delete().eq('id', item.id);
+        if (!error) fetchCategoryItems();
+      }
+    } else {
+      Alert.alert('彻底丢弃', `确定要把 "${item.name}" 从你的收纳盒中永远扔掉吗？`, [
+        { text: '取消', style: 'cancel' },
+        { text: '扔掉', style: 'destructive', onPress: async () => {
+            const { error } = await supabase.from('items').delete().eq('id', item.id);
+            if (!error) fetchCategoryItems();
+        }}
+      ]);
+    }
   };
 
   const openEditModal = (item: any) => {
@@ -96,25 +72,21 @@ const fetchCategoryItems = async () => {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('需要权限', '抱歉，我们需要相册权限才能上传照片！');
+      if (Platform.OS === 'web') window.alert('需要相册权限才能上传照片！');
+      else Alert.alert('需要权限', '抱歉，我们需要相册权限才能上传照片！');
       return;
     }
 
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], 
-      // 👈 核心改动：恢复允许编辑，并强制 1:1 正方形裁剪
-      allowsEditing: true,  
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
       aspect: [1, 1],
-      // 不设置 quality，让系统自动处理，尽量保留原图质量
-      base64: true,   
+      quality: 0.5,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0].base64) {
-      // 注意：开启 editing 后，iOS 可能会强制转为 JPEG，导致透明底变黑/白。
-      // 这是为了统一正方形 UI 的妥协。如果用户选的是 iOS 抠好的透明图，
-      // 裁剪后依然是一个背景透明的正方形图片，视觉上没问题。
-      const mimeType = result.assets[0].mimeType || 'image/jpeg'; 
-      const base64Image = `data:${mimeType};base64,${result.assets[0].base64}`;
+      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
       setEditImageUrl(base64Image); 
     }
   };
@@ -129,49 +101,62 @@ const fetchCategoryItems = async () => {
       image_url: editImageUrl 
     }).eq('id', editingItem.id);
 
-    if (!error) { setModalVisible(false); setEditingItem(null); fetchCategoryItems(); }
-    else { Alert.alert("保存失败", error.message); }
+    if (!error) { 
+      setModalVisible(false); 
+      setEditingItem(null); 
+      fetchCategoryItems(); 
+    } else { 
+      if (Platform.OS === 'web') window.alert("保存失败: " + error.message);
+      else Alert.alert("保存失败", error.message); 
+    }
   };
 
   const renderRightActions = (item: any) => (
     <View style={styles.swipeActionsContainer}>
-      <TouchableOpacity style={[styles.swipeActionBtn, { backgroundColor: '#FFB74D' }]} onPress={() => handleAddMoreToBuy(item)}>
+      {/* 🚀 修复 2：左滑按钮换回 RNTouchableOpacity，并且在 styles 里加了 height: '100%' */}
+      <RNTouchableOpacity style={[styles.swipeActionBtn, { backgroundColor: '#FFB74D' }]} onPress={() => handleAddMoreToBuy(item)}>
         <Text style={styles.swipeActionText}>+1</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.swipeActionBtn, { backgroundColor: '#EF5350' }]} onPress={() => handleDeleteItem(item)}>
+      </RNTouchableOpacity>
+      <RNTouchableOpacity style={[styles.swipeActionBtn, { backgroundColor: '#EF5350' }]} onPress={() => handleDeleteItem(item)}>
         <Text style={styles.swipeActionText}>删除</Text>
-      </TouchableOpacity>
+      </RNTouchableOpacity>
     </View>
   );
 
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.swipeContainer}>
       <Swipeable renderRightActions={() => renderRightActions(item)} overshootRight={false}>
-        <TouchableOpacity 
-          style={styles.itemCard} 
-          activeOpacity={0.7}
-          onPress={() => openEditModal(item)}
-        >
-          <View style={styles.itemInfo}>
+        
+        {/* 🚀 修复核心：把外层换成普通的 View，不再统揽全局的点击事件 */}
+        <View style={styles.itemCard}>
+          
+          {/* 👈 左侧区域：点击文字部分 -> 打开编辑弹窗 */}
+          <TouchableOpacity 
+            style={styles.itemInfo} 
+            activeOpacity={0.6}
+            onPress={() => openEditModal(item)}
+          >
             <Text style={styles.itemName}>{item.name}</Text>
             {item.price ? <Text style={styles.metaText}>💰 价值: {item.price}</Text> : null}
             {item.description ? <Text style={styles.descText} numberOfLines={2}>📝 {item.description}</Text> : null}
             <Text style={styles.quantityText}>
               背包已有: {item.quantity} {item.to_buy > 0 ? ` | 🛒 待买中: ${item.to_buy}` : ''}
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          {/* 👈 修改：将小图包裹在 TouchableOpacity 中，点击触发放大 */}
+          {/* 👉 右侧区域：点击图片 -> 独立触发放大查看 */}
           {item.image_url ? (
-            <TouchableOpacity 
+            <RNTouchableOpacity 
               style={styles.itemImageContainer}
               onPress={() => setZoomedImageUrl(item.image_url)}
               activeOpacity={0.8}
             >
               <Image source={{ uri: item.image_url }} style={styles.itemImage} />
-            </TouchableOpacity>
+            </RNTouchableOpacity>
           ) : null}
-        </TouchableOpacity>
+
+        </View>
+
       </Swipeable>
     </View>
   );
@@ -181,9 +166,9 @@ const fetchCategoryItems = async () => {
       <SafeAreaView style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>{'返回'}</Text>
-          </TouchableOpacity>
+          <RNTouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>{'< 返回'}</Text>
+          </RNTouchableOpacity>
           <Text style={styles.title}>{name} 收纳盒 📦</Text>
         </View>
 
@@ -193,39 +178,69 @@ const fetchCategoryItems = async () => {
           keyExtractor={(item: any) => item.id.toString()}
           contentContainerStyle={styles.listContainer}
           ListEmptyComponent={<Text style={styles.emptyText}>这里空空的，快来添加物品吧！🌱</Text>}
-          keyboardShouldPersistTaps="handled"
         />
 
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.inputSection}>
-          <Text style={styles.inputLabel}>✨ 登记新物品 (点击可编辑/加图，左滑更多选项)</Text>
+          <Text style={styles.inputLabel}>✨ 登记新物品 (轻点可编辑/加图，左滑更多选项)</Text>
           <View style={styles.inputRow}>
             <TextInput style={styles.nameInput} placeholder="物品名称 (如: 可乐)" value={newItemName} onChangeText={setNewItemName} placeholderTextColor="#A1887F" />
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={handleAddItem}>
+          <RNTouchableOpacity style={styles.addBtn} onPress={handleAddItem}>
             <Text style={styles.addBtnText}>加入收纳</Text>
-          </TouchableOpacity>
+          </RNTouchableOpacity>
         </KeyboardAvoidingView>
 
-        {/* 编辑物品弹窗 */}
-        
+        {/* 纯净无错版的编辑弹窗 */}
+        <Modal visible={isModalVisible} transparent={true} animationType="slide">
+          <RNTouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={Keyboard.dismiss}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={{ width: '100%' }}>
+                  <Text style={styles.modalTitle}>✏️ 编辑物品信息</Text>
+                  
+                  <View style={styles.imageUploadSection}>
+                    <RNTouchableOpacity style={styles.imageUploadBtn} onPress={pickImage}>
+                      {editImageUrl ? (
+                        <Image source={{ uri: editImageUrl }} style={styles.previewImage} />
+                      ) : (
+                        <Text style={styles.imageUploadText}>📸 添加/更换照片</Text>
+                      )}
+                    </RNTouchableOpacity>
+                    {editImageUrl ? (
+                      <RNTouchableOpacity onPress={() => setEditImageUrl(null)} style={styles.removeImageBtn}>
+                        <Text style={styles.removeImageText}>清除照片</Text>
+                      </RNTouchableOpacity>
+                    ) : null}
+                  </View>
 
-        {/* 👈 新增：图片放大预览弹窗 (灯箱) */}
+                  <Text style={styles.modalLabel}>物品名称</Text>
+                  <TextInput style={styles.modalInput} value={editName} onChangeText={setEditName} />
+                  <Text style={styles.modalLabel}>当前数量</Text>
+                  <TextInput style={styles.modalInput} value={editQuantity} onChangeText={setEditQuantity} keyboardType="numeric" />
+                  <Text style={styles.modalLabel}>价钱 (可选)</Text>
+                  <TextInput style={styles.modalInput} value={editPrice} onChangeText={setEditPrice} placeholderTextColor="#D7CCC8" />
+                  <Text style={styles.modalLabel}>备注 Description (可选)</Text>
+                  <TextInput style={[styles.modalInput, styles.textArea]} value={editDescription} onChangeText={setEditDescription} placeholderTextColor="#D7CCC8" multiline={true} numberOfLines={2} />
+                  
+                  <View style={styles.modalActions}>
+                    <RNTouchableOpacity style={styles.modalCancelBtn} onPress={() => setModalVisible(false)}>
+                      <Text style={styles.modalCancelText}>取消</Text>
+                    </RNTouchableOpacity>
+                    <RNTouchableOpacity style={styles.modalSaveBtn} onPress={saveEdit}>
+                      <Text style={styles.modalSaveText}>保存</Text>
+                    </RNTouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+          </RNTouchableOpacity>
+        </Modal>
+
+        {/* 🚀 找回丢失的图片放大 Modal */}
         <Modal visible={zoomedImageUrl !== null} transparent={true} animationType="fade">
-          <View style={styles.zoomModalOverlay}>
-            <TouchableOpacity 
-              style={styles.zoomModalContainer} 
-              activeOpacity={1} 
-              onPress={() => setZoomedImageUrl(null)} // 点击空白处或图片关闭弹窗
-            >
-              {zoomedImageUrl && (
-                <Image 
-                  source={{ uri: zoomedImageUrl }} 
-                  style={styles.zoomedImage} 
-                  resizeMode="contain" 
-                />
-              )}
-            </TouchableOpacity>
-          </View>
+          <RNTouchableOpacity style={styles.zoomModalOverlay} activeOpacity={1} onPress={() => setZoomedImageUrl(null)}>
+            <Image source={{ uri: zoomedImageUrl || '' }} style={styles.zoomedImage} resizeMode="contain" />
+          </RNTouchableOpacity>
         </Modal>
 
       </SafeAreaView>
@@ -241,55 +256,36 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: 'bold', color: '#5D4037' },
   listContainer: { padding: 20 },
   emptyText: { textAlign: 'center', color: '#A1887F', marginTop: 40, fontSize: 16 },
-  
   swipeContainer: { marginBottom: 15, borderRadius: 20, backgroundColor: '#FFFFFF', shadowColor: '#78C8A0', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#EFEBE0', overflow: 'hidden' },
   itemCard: { backgroundColor: '#FFFFFF', padding: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  
   itemInfo: { flex: 1, paddingRight: 10 },
   itemName: { fontSize: 18, fontWeight: 'bold', color: '#8D6E63', marginBottom: 4 },
   metaText: { fontSize: 13, color: '#F57C00', fontWeight: '600', marginBottom: 4 },
   descText: { fontSize: 13, color: '#A1887F', fontStyle: 'italic', marginBottom: 8, lineHeight: 18 },
   quantityText: { color: '#78C8A0', fontSize: 13, fontWeight: 'bold', marginTop: 4 },
-  
-  // 恢复了容器的尺寸限制，确保列表整齐
-  itemImageContainer: { 
-    width: 70, 
-    height: 70, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginLeft: 10,
-    backgroundColor: 'transparent', 
-    borderRadius: 12, // 加一点圆角让点击反馈更好看
-    overflow: 'hidden',
-  },
-  // 使用 cover 模式填满正方形容器
+  itemImageContainer: { width: 70, height: 70, borderRadius: 16, backgroundColor: '#FDF6E3', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 1, borderColor: '#EFEBE0', marginLeft: 10 },
   itemImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-
-  swipeActionsContainer: { flexDirection: 'row' },
-  swipeActionBtn: { justifyContent: 'center', alignItems: 'center', width: 75 },
+  
+  // 🚀 核心样式修复：加入了 height: '100%' 保证左滑按钮撑满高度
+  swipeActionsContainer: { flexDirection: 'row', height: '100%' },
+  swipeActionBtn: { justifyContent: 'center', alignItems: 'center', width: 75, height: '100%' },
   swipeActionText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
-
+  
   inputSection: { padding: 25, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#EFEBE0', borderTopLeftRadius: 30, borderTopRightRadius: 30 },
   inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#78C8A0', marginBottom: 15 },
   inputRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
   nameInput: { flex: 1, backgroundColor: '#FDF6E3', borderRadius: 16, padding: 18, color: '#5D4037', fontWeight: '600', fontSize: 16 },
   addBtn: { backgroundColor: '#78C8A0', padding: 18, borderRadius: 16, alignItems: 'center' },
   addBtnText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
-  
-  // 编辑弹窗样式
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FDF6E3', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 5, maxHeight: '90%' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#5D4037', marginBottom: 15, textAlign: 'center' },
-  
   imageUploadSection: { alignItems: 'center', marginBottom: 15 },
-  // 预览图容器也改成正方形
-  imageUploadBtn: { width: 120, height: 120, borderRadius: 20, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 2, borderColor: '#D7CCC8', borderStyle: 'dashed' },
+  imageUploadBtn: { width: 100, height: 100, borderRadius: 20, backgroundColor: '#EFEBE0', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', borderWidth: 2, borderColor: '#D7CCC8', borderStyle: 'dashed' },
   imageUploadText: { color: '#8D6E63', fontWeight: 'bold', textAlign: 'center', fontSize: 13, padding: 5 },
-  // 预览图使用 cover 填满
   previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   removeImageBtn: { marginTop: 8 },
   removeImageText: { color: '#EF5350', fontSize: 13, fontWeight: 'bold' },
-
   modalLabel: { fontSize: 14, fontWeight: 'bold', color: '#8D6E63', marginBottom: 6, marginTop: 10 },
   modalInput: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, color: '#5D4037', fontWeight: '500', borderWidth: 1, borderColor: '#EFEBE0', fontSize: 15 },
   textArea: { minHeight: 60, textAlignVertical: 'top' }, 
@@ -299,8 +295,7 @@ const styles = StyleSheet.create({
   modalSaveBtn: { flex: 1, backgroundColor: '#78C8A0', padding: 15, borderRadius: 14, marginLeft: 10, alignItems: 'center' },
   modalSaveText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
 
-  // 👈 新增：图片放大弹窗样式
+  // 🚀 找回放大的样式
   zoomModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
-  zoomModalContainer: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
-  zoomedImage: { width: screenWidth, height: screenWidth, maxHeight: '80%' }, // 宽度占满屏幕，高度自适应
+  zoomedImage: { width: '100%', height: '80%' }
 });
